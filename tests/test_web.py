@@ -146,6 +146,18 @@ def test_foreign_requests_are_refused(server, headers):
     assert error.value.code == 403
 
 
+@pytest.mark.parametrize("site", ["cross-site", "same-site", "none"])
+def test_page_opens_from_links(server, site):
+    # Following a link from another site to the page itself must work.
+    assert "<title>Sherlock</title>" in get(server, "/", headers={"Sec-Fetch-Site": site})
+
+
+def test_page_refuses_foreign_host(server):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        get(server, "/", headers={"Host": "attacker.example:8080"})
+    assert error.value.code == 403
+
+
 def test_unknown_path(server):
     with pytest.raises(urllib.error.HTTPError) as error:
         get(server, "/nope")

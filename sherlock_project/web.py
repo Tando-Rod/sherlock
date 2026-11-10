@@ -140,7 +140,7 @@ class SherlockRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
 
-        if not self.request_is_trusted():
+        if not self.request_is_trusted(url.path):
             self.send_json(HTTPStatus.FORBIDDEN, {"error": "Cross-site requests are not allowed."})
         elif url.path in ("/", "/index.html"):
             self.send_body(HTTPStatus.OK, "text/html; charset=utf-8", self.server.index_page)
@@ -155,13 +155,15 @@ class SherlockRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
 
-    def request_is_trusted(self) -> bool:
+    def request_is_trusted(self, path: str) -> bool:
         """Reject requests another website makes on behalf of the visitor.
 
         A search sends hundreds of requests from this machine, so a page on
-        some other origin must not be able to start one.
+        some other origin must not be able to start one. Opening the page
+        itself from a link elsewhere is fine: it starts nothing on its own.
         """
-        if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+        sec_fetch_site = self.headers.get("Sec-Fetch-Site", "same-origin")
+        if path.startswith("/api/") and sec_fetch_site not in ("same-origin", "none"):
             return False
 
         if self.server.loopback_only:
