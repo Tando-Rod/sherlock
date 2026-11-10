@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Sherlock</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --surface-2: #efece4;
+    --border: #dcd7ca;
+    --text: #1d1b16;
+    --muted: #6b6659;
+    --accent: #9a5b00;
+    --accent-text: #ffffff;
+    --found: #1a7f4b;
+    --missing: #6b6659;
+    --trouble: #b3401f;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15140f;
+      --surface: #1e1c16;
+      --surface-2: #29261e;
+      --border: #3a362b;
+      --text: #f0ece1;
+      --muted: #a39d8c;
+      --accent: #e9a53a;
+      --accent-text: #1d1503;
+      --found: #57c98b;
+      --missing: #a39d8c;
+      --trouble: #f08a66;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 64px; }
+  header { margin-bottom: 28px; }
+  h1 { margin: 0; font-size: 2rem; letter-spacing: -0.02em; }
+  .tagline { margin: 4px 0 0; color: var(--muted); }
+
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  .field {
+    flex: 1 1 260px; display: flex; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .field:focus-within { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+  .field span { padding-left: 14px; color: var(--muted); font-family: var(--mono); }
+  .field input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit;
+    font: 1.05rem var(--mono); padding: 12px 14px 12px 4px;
+  }
+  button {
+    font: inherit; cursor: pointer; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    padding: 8px 14px;
+  }
+  button:hover:not(:disabled) { background: var(--surface-2); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button:focus-visible, a:focus-visible, .filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: var(--accent-text);
+    font-weight: 600; padding: 12px 22px;
+  }
+  button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+  .options { margin-top: 10px; color: var(--muted); font-size: 0.9rem; }
+  .options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .options input { accent-color: var(--accent); }
+
+  #progress { margin-top: 28px; }
+  #status { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 0.95rem; }
+  #status .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #status.failed #message { color: var(--trouble); }
+  .bar { height: 6px; margin-top: 8px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tabs button { padding: 6px 12px; font-size: 0.9rem; }
+  .tabs button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+  .tabs b { font-variant-numeric: tabular-nums; margin-left: 4px; }
+  .filter {
+    flex: 1 1 140px; min-width: 0; font: inherit; font-size: 0.9rem; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); color: var(--text);
+  }
+  .export { display: flex; gap: 4px; }
+  .export button { padding: 6px 10px; font-size: 0.85rem; }
+
+  #results {
+    list-style: none; margin: 12px 0 0; padding: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  #results li {
+    display: grid; grid-template-columns: minmax(110px, 180px) 1fr auto; gap: 12px;
+    align-items: baseline; padding: 9px 14px; border-top: 1px solid var(--border);
+  }
+  #results li:first-child { border-top: 0; }
+  #results .site { font-weight: 600; overflow-wrap: anywhere; }
+  #results .site::before {
+    content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 8px; background: var(--dot);
+  }
+  #results .detail { min-width: 0; font: 0.88rem var(--mono); overflow-wrap: anywhere; color: var(--muted); }
+  #results a { color: var(--accent); text-decoration: none; }
+  #results a:hover { text-decoration: underline; }
+  #results .ms { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #results .empty { display: block; color: var(--muted); text-align: center; padding: 28px 14px; }
+  @media (max-width: 560px) {
+    #results li { grid-template-columns: 1fr auto; }
+    #results .detail { grid-column: 1 / -1; grid-row: 2; }
+  }
+
+  .intro { margin-top: 28px; color: var(--muted); }
+  footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Sherlock</h1>
+    <p class="tagline">Find accounts with a given username across <span id="site-count">hundreds of</span> sites.</p>
+  </header>
+
+  <form id="search" autocomplete="off">
+    <label class="field">
+      <span aria-hidden="true">@</span>
+      <input id="username" name="username" type="text" aria-label="Username" placeholder="username"
+             maxlength="100" autocapitalize="none" spellcheck="false" autofocus required>
+    </label>
+    <button id="go" class="primary" type="submit">Search</button>
+    <button id="stop" type="button" hidden>Stop</button>
+  </form>
+  <div class="options">
+    <label><input id="nsfw" type="checkbox"> Include NSFW sites<span id="nsfw-count"></span></label>
+  </div>
+
+  <p class="intro" id="intro">
+    Results appear here as each site answers. A match means an account with that exact
+    name exists, not that it belongs to the same person.
+  </p>
+
+  <section id="progress" hidden>
+    <div id="status" role="status" aria-live="polite">
+      <span id="message"></span>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="bar"><div id="bar"></div></div>
+
+    <div class="toolbar">
+      <div class="tabs" id="tabs">
+        <button type="button" data-tab="found" aria-pressed="true">Found<b>0</b></button>
+        <button type="button" data-tab="missing" aria-pressed="false">Not found<b>0</b></button>
+        <button type="button" data-tab="trouble" aria-pressed="false">Couldn't check<b>0</b></button>
+      </div>
+      <input class="filter" id="filter" type="search" placeholder="Filter sites" aria-label="Filter sites">
+      <div class="export">
+        <button type="button" id="copy" title="Copy the links of all found accounts">Copy links</button>
+        <button type="button" id="csv" title="Download all results as CSV">CSV</button>
+        <button type="button" id="json" title="Download all results as JSON">JSON</button>
+      </div>
+    </div>
+    <ul id="results"></ul>
+  </section>
+
+  <footer>
+    Sherlock <span id="version"></span> &middot; Searches run from the machine hosting this page.
+    Use it for accounts you are entitled to look into.
+  </footer>
+</main>
+
+<script>
+"use strict";
+
+const TABS = {
+  found:   { statuses: ["Claimed"], color: "var(--found)", empty: "No accounts found yet." },
+  missing: { statuses: ["Available"], color: "var(--missing)", empty: "Nothing here yet." },
+  trouble: { statuses: ["Unknown", "WAF", "Illegal"], color: "var(--trouble)", empty: "Every site could be checked so far." },
+};
+const REASONS = {
+  Unknown: "Could not be checked",
+  WAF: "Blocked by the site's bot protection",
+  Illegal: "This site does not allow such a username",
+};
+
+const $ = (id) => document.getElementById(id);
+const state = { username: "", total: 0, results: [], tab: "found", source: null, drawQueued: false };
+
+function tabOf(result) {
+  return Object.keys(TABS).find((tab) => TABS[tab].statuses.includes(result.status)) || "trouble";
+}
+
+function setRunning(running) {
+  $("go").disabled = running;
+  $("stop").hidden = !running;
+}
+
+function setMessage(text, failed = false) {
+  $("message").textContent = text;
+  $("status").classList.toggle("failed", failed);
+}
+
+function finish(text, failed = false) {
+  if (state.source) state.source.close();
+  state.source = null;
+  setRunning(false);
+  setMessage(text, failed);
+  draw();
+}
+
+function summary() {
+  const found = state.results.filter((r) => r.status === "Claimed").length;
+  return `${found} account${found === 1 ? "" : "s"} found for "${state.username}"`;
+}
+
+function startSearch(username, nsfw) {
+  if (state.source) state.source.close();
+  Object.assign(state, { username, total: 0, results: [] });
+  $("intro").hidden = true;
+  $("progress").hidden = false;
+  $("filter").value = "";
+  setRunning(true);
+  setMessage(`Searching for "${username}"…`);
+  draw();
+
+  const query = new URLSearchParams({ username, nsfw: nsfw ? "1" : "0" });
+  const source = new EventSource(`/api/search?${query}`);
+  state.source = source;
+
+  source.addEventListener("start", (event) => {
+    state.total = JSON.parse(event.data).total;
+    queueDraw();
+  });
+  source.addEventListener("result", (event) => {
+    state.results.push(JSON.parse(event.data));
+    queueDraw();
+  });
+  source.addEventListener("done", () => finish(`Done. ${summary()}.`));
+  source.addEventListener("fail", (event) => finish(JSON.parse(event.data).message, true));
+  // EventSource reconnects by itself, which would start the search all over
+  // again. Any connection problem therefore ends the search.
+  source.onerror = () => {
+    if (state.source === source) finish(`Lost the connection to the server. ${summary()} so far.`, true);
+  };
+}
+
+function queueDraw() {
+  if (state.drawQueued) return;
+  state.drawQueued = true;
+  requestAnimationFrame(() => { state.drawQueued = false; draw(); });
+}
+
+function draw() {
+  const done = state.results.length;
+  $("count").textContent = state.total ? `${done} / ${state.total} sites` : "";
+  $("bar").style.width = state.total ? `${Math.min(100, (done / state.total) * 100)}%` : "0";
+
+  const groups = { found: [], missing: [], trouble: [] };
+  for (const result of state.results) groups[tabOf(result)].push(result);
+
+  for (const button of $("tabs").children) {
+    button.setAttribute("aria-pressed", String(button.dataset.tab === state.tab));
+    button.querySelector("b").textContent = groups[button.dataset.tab].length;
+  }
+  for (const id of ["csv", "json"]) $(id).disabled = done === 0;
+  $("copy").disabled = groups.found.length === 0;
+
+  const needle = $("filter").value.trim().toLowerCase();
+  const rows = groups[state.tab]
+    .filter((r) => !needle || r.site.toLowerCase().includes(needle))
+    .sort((a, b) => a.site.localeCompare(b.site, undefined, { sensitivity: "base" }));
+
+  const list = $("results");
+  list.replaceChildren();
+  if (rows.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = needle ? "No site matches the filter." : TABS[state.tab].empty;
+    list.append(empty);
+    return;
+  }
+  for (const result of rows) list.append(row(result));
+}
+
+function row(result) {
+  const item = document.createElement("li");
+  item.style.setProperty("--dot", TABS[tabOf(result)].color);
+
+  const site = document.createElement("span");
+  site.className = "site";
+  site.textContent = result.site;
+
+  const detail = document.createElement("span");
+  detail.className = "detail";
+  if (result.status === "Claimed" && /^https?:\/\//i.test(result.url)) {
+    const link = document.createElement("a");
+    link.href = result.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = result.url;
+    detail.append(link);
+  } else if (result.status === "Available") {
+    detail.textContent = "No account with this name";
+  } else {
+    detail.textContent = result.context || REASONS[result.status] || result.status;
+  }
+
+  const ms = document.createElement("span");
+  ms.className = "ms";
+  ms.textContent = result.ms == null ? "" : `${result.ms} ms`;
+
+  item.append(site, detail, ms);
+  return item;
+}
+
+function download(name, type, text) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type }));
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function fileName(extension) {
+  const safe = state.username.replace(/[^\w.-]+/g, "_") || "results";
+  return `sherlock-${safe}.${extension}`;
+}
+
+function csvCell(value) {
+  let text = value == null ? "" : String(value);
+  // Stops spreadsheet programs from running a cell as a formula.
+  if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+$("search").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const username = $("username").value.trim();
+  if (username) startSearch(username, $("nsfw").checked);
+});
+
+$("stop").addEventListener("click", () => finish(`Stopped. ${summary()} so far.`));
+
+$("tabs").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  state.tab = button.dataset.tab;
+  draw();
+});
+
+$("filter").addEventListener("input", draw);
+
+$("copy").addEventListener("click", async () => {
+  const links = state.results.filter((r) => r.status === "Claimed").map((r) => r.url).sort();
+  const button = $("copy");
+  try {
+    await navigator.clipboard.writeText(links.join("\n"));
+    button.textContent = "Copied";
+  } catch {
+    button.textContent = "Copy failed";
+  }
+  setTimeout(() => { button.textContent = "Copy links"; }, 1500);
+});
+
+$("csv").addEventListener("click", () => {
+  const lines = [["username", "site", "url", "status", "response_time_ms", "note"]];
+  for (const r of state.results) lines.push([state.username, r.site, r.url, r.status, r.ms, r.context]);
+  download(fileName("csv"), "text/csv", lines.map((line) => line.map(csvCell).join(",")).join("\r\n") + "\r\n");
+});
+
+$("json").addEventListener("click", () => {
+  const data = { username: state.username, results: state.results };
+  download(fileName("json"), "application/json", JSON.stringify(data, null, 2));
+});
+
+fetch("/api/info")
+  .then((response) => response.json())
+  .then((info) => {
+    $("site-count").textContent = info.sites;
+    $("version").textContent = info.version;
+    if (info.nsfw_sites) $("nsfw-count").textContent = ` (${info.nsfw_sites} more)`;
+    else $("nsfw").closest(".options").hidden = true;
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>
