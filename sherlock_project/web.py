@@ -15,10 +15,9 @@ import socket
 import sys
 import threading
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
+from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from collections.abc import Callable
-from typing import Optional
 from urllib.parse import parse_qs, urlsplit
 
 from sherlock_project import __longname__, __version__
@@ -76,7 +75,7 @@ class QueryNotifyQueue(QueryNotify):
         }))
 
 
-def validate_username(username: str) -> Optional[str]:
+def validate_username(username: str) -> str | None:
     """Return a message describing why a username is unusable, or None."""
     if not username:
         return "Enter a username to search for."
@@ -97,7 +96,7 @@ class SherlockWebServer(ThreadingHTTPServer):
         address: tuple[str, int],
         sites: SitesInformation,
         timeout: float = 30,
-        proxy: Optional[str] = None,
+        proxy: str | None = None,
         max_searches: int = 4,
         search: Callable = sherlock,
         verbose: bool = False,
@@ -141,7 +140,7 @@ class SherlockRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
 
-        if not self.request_is_trusted():
+        if not self.request_is_trusted(url.path):
             self.send_json(HTTPStatus.FORBIDDEN, {"error": "Cross-site requests are not allowed."})
         elif url.path in ("/", "/index.html"):
             self.send_body(HTTPStatus.OK, "text/html; charset=utf-8", self.server.index_page)
@@ -156,13 +155,15 @@ class SherlockRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_json(HTTPStatus.NOT_FOUND, {"error": "Not found."})
 
-    def request_is_trusted(self) -> bool:
+    def request_is_trusted(self, path: str) -> bool:
         """Reject requests another website makes on behalf of the visitor.
 
         A search sends hundreds of requests from this machine, so a page on
-        some other origin must not be able to start one.
+        some other origin must not be able to start one. Opening the page
+        itself from a link elsewhere is fine: it starts nothing on its own.
         """
-        if self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+        sec_fetch_site = self.headers.get("Sec-Fetch-Site", "same-origin")
+        if path.startswith("/api/") and sec_fetch_site not in ("same-origin", "none"):
             return False
 
         if self.server.loopback_only:
@@ -227,7 +228,7 @@ class SherlockRequestHandler(BaseHTTPRequestHandler):
                 events.put(("done", {}))
             except SearchCancelled:
                 pass
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 -- any failure must reach the browser
                 events.put(("fail", {"message": f"The search failed: {error}"}))
             finally:
                 self.server.search_slots.release()
@@ -254,7 +255,7 @@ class SherlockRequestHandler(BaseHTTPRequestHandler):
             cancelled.set()
 
 
-def load_sites(local: bool = False, json_file: Optional[str] = None,
+def load_sites(local: bool = False, json_file: str | None = None,
                honor_exclusions: bool = True) -> SitesInformation:
     """Load the site list, preferring the up-to-date online one like the CLI."""
     if local:
@@ -328,7 +329,8 @@ def main():
             max_searches=args.max_searches,
             verbose=args.verbose,
         )
-    except Exception as error:
+    except (OSError, ValueError) as error:
+        # Site list problems, or the address/port cannot be used.
         print(f"ERROR:  {error}", file=sys.stderr)
         sys.exit(1)
 
