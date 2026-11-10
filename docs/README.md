@@ -98,6 +98,22 @@ options:
   --ignore-exclusions   Ignore upstream exclusions (may return more false positives)
 ```
 
+## Web interface
+
+Sherlock also ships with a small web interface that streams results to your browser as each site answers:
+
+```bash
+sherlock-web
+```
+
+Then open http://127.0.0.1:8080. Results can be filtered and exported as CSV or JSON.
+Use `--port` to pick another port, and see `sherlock-web --help` for the remaining options
+(`--timeout`, `--proxy`, `--local`, `--json`, ...).
+
+> [!WARNING]
+> The web interface has no authentication. It only listens on your own machine by default;
+> if you expose it with `--host`, anyone who can reach it can run searches from your machine.
+
 ## Credits
 
 Thank you to everyone who has contributed to Sherlock! ❤️
